@@ -1,0 +1,29 @@
+id = "vyper"
+name = "Vyper"
+version = "0.2.0"
+schema_version = 1
+description = "Vyper language support for Zed."
+repository = "https://github.com/heswithme/zed-vyper"
+authors = ["heswithme"]
+languages = ["languages/vyper"]
+capabilities = [
+    { kind = "process:exec", command = "uv", args = ["**"] },
+    { kind = "process:exec", command = "python3.12", args = ["**"] },
+    { kind = "process:exec", command = "python3", args = ["**"] },
+    { kind = "process:exec", command = "python", args = ["**"] },
+]
+
+[lib]
+kind = "Rust"
+version = "0.7.0"
+
+[grammars.vyper]
+repository = "https://github.com/heswithme/vyper-tree-sitter"
+rev = "6c2356f9f855b17c5a9192d8217f7bb0e07c1771"
+
+[language_servers.vyper-lsp]
+name = "Vyper LSP"
+languages = ["Vyper"]
+
+[language_servers.vyper-lsp.language_ids]
+"Vyper" = "vyper"

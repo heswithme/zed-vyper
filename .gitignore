@@ -1,0 +1,5 @@
+/.zed-vyper/
+/target/
+/parser.dylib
+/grammars/vyper/
+.DS_Store
