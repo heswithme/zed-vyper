@@ -104,14 +104,23 @@ If neither is present, the extension falls back to a `vyper-lsp` already on
 ### Local Development
 
 1. Install Rust with `rustup`.
-2. In Zed, run `zed: install dev extension` and point it at this directory.
-3. For testing managed install, ensure either `uv` or Python 3.12+ is available.
-4. Optionally override the server path through `lsp.vyper-lsp.binary.path`.
+2. Build the extension runtime:
+
+```bash
+cargo build --target wasm32-wasip2 --release
+cp target/wasm32-wasip2/release/zed_vyper.wasm extension.wasm
+```
+
+3. In Zed, run `zed: install dev extension` and point it at this directory.
+4. Trust the workspace so Zed can start `vyper-lsp`.
+5. For testing managed install, ensure either `uv` or Python 3.12+ is available.
+6. Optionally override the server path through `lsp.vyper-lsp.binary.path`.
 
 ### Verification
 
 ```bash
 cargo check
+cargo build --target wasm32-wasip2 --release
 ```
 
 For grammar smoke checks, parse the fixtures with the pinned grammar revision:
@@ -121,9 +130,10 @@ git clone https://github.com/heswithme/vyper-tree-sitter /tmp/vyper-tree-sitter
 git -C /tmp/vyper-tree-sitter checkout 6c2356f9f855b17c5a9192d8217f7bb0e07c1771
 cd /tmp/vyper-tree-sitter
 tree-sitter generate
+ZED_VYPER_DIR=/path/to/zed-vyper
 tree-sitter parse -q -p /tmp/vyper-tree-sitter \
-  $ZED_VYPER_DIR/fixtures/*.vy \
-  $ZED_VYPER_DIR/fixtures/*.vyi
+  "$ZED_VYPER_DIR"/fixtures/*.vy \
+  "$ZED_VYPER_DIR"/fixtures/*.vyi
 ```
 
 ## Scope for v1
