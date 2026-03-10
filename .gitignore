@@ -1,4 +1,3 @@
-/.zed-vyper/
 /target/
 /parser.dylib
 /grammars/vyper/

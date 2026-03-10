@@ -7,12 +7,12 @@ Reference-quality Vyper support for Zed.
 - Native Zed language support for `.vy` and `.vyi`
 - Tree-sitter-based highlighting, outline, indentation, bracket matching, and text objects
 - `vyper-lsp` integration for diagnostics, completion, hover, references, and navigation
-- Managed `vyper-lsp` provisioning for the default case, with manual override support
+- User-managed `vyper-lsp` integration with explicit binary override support
 - A clean split between parser maintenance in `vyper-tree-sitter` and editor UX in this repo
 
 ## Backend Strategy
 
-`zed-vyper` provisions `vyper-lsp` automatically for the common case.
+`zed-vyper` expects users to install `vyper-lsp` themselves.
 
 Syntax support aims to stay broad enough to open real-world Vyper files cleanly.
 LSP support is intentionally aligned with the current `vyper-lsp` support window
@@ -28,26 +28,25 @@ This extension is pinned to:
 All Zed-specific `.scm` queries live in this repository under `languages/vyper/`.
 The grammar repository is treated as the parser source, not the editor UX layer.
 
-## Managed `vyper-lsp`
+## Install `vyper-lsp`
 
-On first use, the extension tries the following in order:
+Recommended:
+
+```bash
+uv tool install vyper-lsp
+```
+
+The extension resolves `vyper-lsp` in this order:
 
 1. `lsp.vyper-lsp.binary.path` if you configured one explicitly
-2. a cached managed install inside the extension working directory
-3. a managed install via `uv` if `uv` is available on your `PATH`
-4. a managed install via Python 3.12+ and `venv` if a suitable interpreter is available
-5. `vyper-lsp` already installed on your `PATH`
+2. `vyper-lsp` on your `PATH`
 
-If all of those fail, Zed shows an installation failure for the language server.
-
-The managed install is pinned to:
-
-- `vyper-lsp==0.1.4`
+If neither exists, Zed shows a language server failure telling you to install
+`vyper-lsp` or configure an explicit binary path.
 
 ## Zed Configuration
 
-Automatic provisioning is the default UX, but manual configuration is still
-supported. If you already manage `vyper-lsp` yourself, you can point Zed to it:
+If you already manage `vyper-lsp` yourself, you can point Zed to it explicitly:
 
 ```json
 {
@@ -82,22 +81,12 @@ options, and workspace settings:
 }
 ```
 
-## Environment Requirements
-
-For the automatic managed install path, one of these needs to be available:
-
-- `uv`
-- Python 3.12+
-
-If neither is present, the extension falls back to a `vyper-lsp` already on
-`PATH` or an explicitly configured binary override.
-
 ## Development
 
 ### Repository Layout
 
 - `extension.toml`: Zed extension manifest, capabilities, and pinned grammar reference
-- `Cargo.toml` and `src/lib.rs`: Zed extension runtime for provisioning and launching `vyper-lsp`
+- `Cargo.toml` and `src/lib.rs`: Zed extension runtime for resolving and launching `vyper-lsp`
 - `languages/vyper/`: language registration plus Zed Tree-sitter queries
 - `fixtures/`: Vyper samples used for smoke coverage of syntax queries
 
@@ -113,7 +102,12 @@ cp target/wasm32-wasip2/release/zed_vyper.wasm extension.wasm
 
 3. In Zed, run `zed: install dev extension` and point it at this directory.
 4. Trust the workspace so Zed can start `vyper-lsp`.
-5. For testing managed install, ensure either `uv` or Python 3.12+ is available.
+5. Install `vyper-lsp` yourself if you want to test LSP features:
+
+```bash
+uv tool install vyper-lsp
+```
+
 6. Optionally override the server path through `lsp.vyper-lsp.binary.path`.
 
 ### Verification
@@ -142,7 +136,7 @@ Included:
 
 - publishable grammar pin
 - syntax highlighting and editor ergonomics
-- managed `vyper-lsp` provisioning with explicit binary override support
+- user-managed `vyper-lsp` integration with explicit binary override support
 - Zed-native text objects for functions and declarations
 
 Deferred:

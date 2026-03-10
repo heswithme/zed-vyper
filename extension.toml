@@ -6,12 +6,7 @@ description = "Vyper language support for Zed."
 repository = "https://github.com/heswithme/zed-vyper"
 authors = ["heswithme"]
 languages = ["languages/vyper"]
-capabilities = [
-    { kind = "process:exec", command = "uv", args = ["**"] },
-    { kind = "process:exec", command = "python3.12", args = ["**"] },
-    { kind = "process:exec", command = "python3", args = ["**"] },
-    { kind = "process:exec", command = "python", args = ["**"] },
-]
+capabilities = []
 
 [lib]
 kind = "Rust"
