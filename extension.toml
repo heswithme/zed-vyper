@@ -14,7 +14,7 @@ version = "0.7.0"
 
 [grammars.vyper]
 repository = "https://github.com/heswithme/vyper-tree-sitter"
-rev = "1f4eb25700c65908106ce8c4a63e8c35939f5ccc"
+rev = "6f78ae655bc405e2be898e30cf70ff37121fc933"
 
 [language_servers.vyper-lsp]
 name = "Vyper LSP"

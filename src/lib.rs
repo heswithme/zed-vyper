@@ -69,12 +69,12 @@ impl VyperExtension {
         "Unable to find `vyper-lsp`. Install it with `uv tool install vyper-lsp`, ensure it is available on your PATH, or configure `lsp.vyper-lsp.binary.path`.".to_string()
     }
 
+    fn is_windows() -> bool {
+        matches!(zed::current_platform().0, zed::Os::Windows)
+    }
+
     fn path_list_separator() -> &'static str {
-        if matches!(zed::current_platform().0, zed::Os::Windows) {
-            ";"
-        } else {
-            ":"
-        }
+        if Self::is_windows() { ";" } else { ":" }
     }
 
     fn normalized_worktree_base(root_path: &str) -> PathBuf {
@@ -105,28 +105,14 @@ impl VyperExtension {
             .collect()
     }
 
-    fn unix_site_packages(venv_dir: &Path) -> Vec<String> {
-        Self::fallback_site_packages(venv_dir)
+    fn push_unique(paths: &mut Vec<String>, path: String) {
+        if !paths.contains(&path) {
+            paths.push(path);
+        }
     }
 
-    fn workspace_venv_for_dir_with_platform(venv_dir: &Path, is_windows: bool) -> WorkspaceVenv {
-        if is_windows {
-            return WorkspaceVenv {
-                bin_dirs: vec![venv_dir.join("Scripts").to_string_lossy().into_owned()],
-                site_packages: vec![
-                    venv_dir
-                        .join("Lib")
-                        .join("site-packages")
-                        .to_string_lossy()
-                        .into_owned(),
-                ],
-            };
-        }
-
-        WorkspaceVenv {
-            bin_dirs: vec![venv_dir.join("bin").to_string_lossy().into_owned()],
-            site_packages: Self::unix_site_packages(venv_dir),
-        }
+    fn is_filesystem_root(path: &Path) -> bool {
+        path.has_root() && path.parent().is_none()
     }
 
     fn ancestor_dirs(base: &Path) -> Vec<PathBuf> {
@@ -134,12 +120,16 @@ impl VyperExtension {
         let mut result = Vec::new();
 
         for _ in 0..=Self::MAX_VENV_ANCESTOR_STEPS {
+            if current.as_os_str().is_empty() || Self::is_filesystem_root(&current) {
+                break;
+            }
+
             result.push(current.clone());
 
             let Some(parent) = current.parent().map(Path::to_path_buf) else {
                 break;
             };
-            if parent == current {
+            if parent == current || parent.as_os_str().is_empty() {
                 break;
             }
 
@@ -154,10 +144,32 @@ impl VyperExtension {
         let mut site_packages = Vec::new();
 
         for ancestor in Self::ancestor_dirs(base) {
-            let venv =
-                Self::workspace_venv_for_dir_with_platform(&ancestor.join(".venv"), is_windows);
-            bin_dirs.extend(venv.bin_dirs);
-            site_packages.extend(venv.site_packages);
+            let venv_dir = ancestor.join(".venv");
+
+            if is_windows {
+                Self::push_unique(
+                    &mut bin_dirs,
+                    venv_dir.join("Scripts").to_string_lossy().into_owned(),
+                );
+                Self::push_unique(
+                    &mut site_packages,
+                    venv_dir
+                        .join("Lib")
+                        .join("site-packages")
+                        .to_string_lossy()
+                        .into_owned(),
+                );
+                continue;
+            }
+
+            Self::push_unique(
+                &mut bin_dirs,
+                venv_dir.join("bin").to_string_lossy().into_owned(),
+            );
+
+            for site_package in Self::fallback_site_packages(&venv_dir) {
+                Self::push_unique(&mut site_packages, site_package);
+            }
         }
 
         WorkspaceVenv {
@@ -167,15 +179,12 @@ impl VyperExtension {
     }
 
     fn workspace_venv_for_base(base: &Path) -> WorkspaceVenv {
-        Self::workspace_venv_for_base_with_platform(
-            base,
-            matches!(zed::current_platform().0, zed::Os::Windows),
-        )
+        Self::workspace_venv_for_base_with_platform(base, Self::is_windows())
     }
 
-    fn workspace_venv(worktree: &Worktree) -> Option<WorkspaceVenv> {
+    fn workspace_venv(worktree: &Worktree) -> WorkspaceVenv {
         let base = Self::normalized_worktree_base(&worktree.root_path());
-        Some(Self::workspace_venv_for_base(&base))
+        Self::workspace_venv_for_base(&base)
     }
 
     fn set_env_var(env: &mut Vec<(String, String)>, key: &str, value: String) {
@@ -199,10 +208,7 @@ impl VyperExtension {
     }
 
     fn inject_workspace_venv(worktree: &Worktree, env: &mut Vec<(String, String)>) {
-        let Some(venv) = Self::workspace_venv(worktree) else {
-            return;
-        };
-
+        let venv = Self::workspace_venv(worktree);
         let separator = Self::path_list_separator();
 
         // Make workspace-installed Vyper libraries visible to the global language server.
@@ -218,6 +224,28 @@ impl VyperExtension {
         for (key, value) in overrides {
             Self::set_env_var(env, &key, value);
         }
+    }
+
+    fn ready_command(
+        language_server_id: &LanguageServerId,
+        command: String,
+        args: Vec<String>,
+        env: Vec<(String, String)>,
+    ) -> Result<Command> {
+        Self::mark_status(language_server_id, LanguageServerInstallationStatus::None);
+        Ok(Command { command, args, env })
+    }
+
+    fn initialization_options_from_settings(
+        settings: Option<LspSettings>,
+    ) -> Option<serde_json::Value> {
+        settings.and_then(|lsp_settings| lsp_settings.initialization_options)
+    }
+
+    fn workspace_configuration_from_settings(
+        settings: Option<LspSettings>,
+    ) -> Option<serde_json::Value> {
+        settings.and_then(|lsp_settings| lsp_settings.settings)
     }
 }
 
@@ -242,21 +270,11 @@ impl Extension for VyperExtension {
         Self::apply_env_overrides(&mut env, env_overrides);
 
         if let Some(explicit_path) = explicit_path {
-            Self::mark_status(language_server_id, LanguageServerInstallationStatus::None);
-            return Ok(Command {
-                command: explicit_path,
-                args,
-                env,
-            });
+            return Self::ready_command(language_server_id, explicit_path, args, env);
         }
 
         if let Some(path_binary) = worktree.which(Self::LANGUAGE_SERVER_ID) {
-            Self::mark_status(language_server_id, LanguageServerInstallationStatus::None);
-            return Ok(Command {
-                command: path_binary,
-                args,
-                env,
-            });
+            return Self::ready_command(language_server_id, path_binary, args, env);
         }
 
         let message = Self::missing_binary_message();
@@ -272,12 +290,9 @@ impl Extension for VyperExtension {
         language_server_id: &LanguageServerId,
         worktree: &Worktree,
     ) -> Result<Option<serde_json::Value>> {
-        let settings = LspSettings::for_worktree(language_server_id.as_ref(), worktree)
-            .ok()
-            .and_then(|lsp_settings| lsp_settings.initialization_options)
-            .unwrap_or_default();
-
-        Ok(Some(settings))
+        Ok(Self::initialization_options_from_settings(
+            LspSettings::for_worktree(language_server_id.as_ref(), worktree).ok(),
+        ))
     }
 
     fn language_server_workspace_configuration(
@@ -285,12 +300,9 @@ impl Extension for VyperExtension {
         language_server_id: &LanguageServerId,
         worktree: &Worktree,
     ) -> Result<Option<serde_json::Value>> {
-        let settings = LspSettings::for_worktree(language_server_id.as_ref(), worktree)
-            .ok()
-            .and_then(|lsp_settings| lsp_settings.settings)
-            .unwrap_or_default();
-
-        Ok(Some(settings))
+        Ok(Self::workspace_configuration_from_settings(
+            LspSettings::for_worktree(language_server_id.as_ref(), worktree).ok(),
+        ))
     }
 }
 
@@ -334,7 +346,6 @@ mod tests {
                 "/workspace/contracts/main/.venv/bin",
                 "/workspace/contracts/.venv/bin",
                 "/workspace/.venv/bin",
-                "/.venv/bin",
             ]
         );
 
@@ -353,11 +364,26 @@ mod tests {
 
     #[test]
     fn generates_windows_workspace_venv_candidates() {
-        let venv =
-            VyperExtension::workspace_venv_for_dir_with_platform(Path::new("C:/repo/.venv"), true);
+        let venv = VyperExtension::workspace_venv_for_base_with_platform(Path::new("repo"), true);
 
-        assert_eq!(venv.bin_dirs, vec!["C:/repo/.venv/Scripts"]);
-        assert_eq!(venv.site_packages, vec!["C:/repo/.venv/Lib/site-packages"]);
+        assert_eq!(venv.bin_dirs, vec!["repo/.venv/Scripts"]);
+        assert_eq!(venv.site_packages, vec!["repo/.venv/Lib/site-packages"]);
+    }
+
+    #[test]
+    fn initialization_options_are_none_when_unset() {
+        assert_eq!(
+            VyperExtension::initialization_options_from_settings(None),
+            None
+        );
+    }
+
+    #[test]
+    fn workspace_configuration_is_none_when_unset() {
+        assert_eq!(
+            VyperExtension::workspace_configuration_from_settings(None),
+            None
+        );
     }
 
     #[test]

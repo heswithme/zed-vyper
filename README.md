@@ -34,7 +34,7 @@ for modern Vyper projects.
 This extension is pinned to:
 
 - grammar repo: `https://github.com/heswithme/vyper-tree-sitter`
-- revision: `1f4eb25700c65908106ce8c4a63e8c35939f5ccc`
+- revision: `6f78ae655bc405e2be898e30cf70ff37121fc933`
 
 All Zed-specific `.scm` queries live in this repository under `languages/vyper/`.
 The grammar repository is treated as the parser source, not the editor UX layer.
@@ -138,7 +138,7 @@ For grammar smoke checks, parse the fixtures with the pinned grammar revision:
 
 ```bash
 git clone https://github.com/heswithme/vyper-tree-sitter /tmp/vyper-tree-sitter
-git -C /tmp/vyper-tree-sitter checkout 1f4eb25700c65908106ce8c4a63e8c35939f5ccc
+git -C /tmp/vyper-tree-sitter checkout 6f78ae655bc405e2be898e30cf70ff37121fc933
 cd /tmp/vyper-tree-sitter
 tree-sitter generate
 ZED_VYPER_DIR=/path/to/zed-vyper
