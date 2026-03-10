@@ -26,7 +26,7 @@ jobs:
       - name: Clone Pinned Grammar
         run: |
           git clone https://github.com/heswithme/vyper-tree-sitter /tmp/vyper-tree-sitter
-          git -C /tmp/vyper-tree-sitter checkout 98bf96ec1588d0bb0f5ce389d69c91c322dce27f
+          git -C /tmp/vyper-tree-sitter checkout 0948bf47821b84425d06e91b144f5f2bc0816ba3
           cd /tmp/vyper-tree-sitter
           tree-sitter generate
 
