@@ -8,11 +8,22 @@ Reference-quality Vyper support for Zed.
 - Tree-sitter-based highlighting, outline, indentation, bracket matching, and text objects
 - `vyper-lsp` integration for diagnostics, completion, hover, references, and navigation
 - User-managed `vyper-lsp` integration with explicit binary override support
+- Automatic workspace `.venv` exposure for Vyper libraries installed in site-packages
 - A clean split between parser maintenance in `vyper-tree-sitter` and editor UX in this repo
 
 ## Backend Strategy
 
 `zed-vyper` expects users to install `vyper-lsp` themselves.
+
+To help global `vyper-lsp` resolve workspace-installed Vyper libraries, the
+extension prepends common `.venv` candidate paths from the current worktree and
+its ancestors:
+
+- `.venv/lib/python3.15` through `.venv/lib/python3.10` `site-packages` paths to `PYTHONPATH`
+- `.venv/bin` to `PATH`
+
+before launching `vyper-lsp`. This keeps the language server global while still
+making project-installed Vyper libraries visible without per-project Zed config.
 
 Syntax support aims to stay broad enough to open real-world Vyper files cleanly.
 LSP support is intentionally aligned with the current `vyper-lsp` support window
@@ -23,7 +34,7 @@ for modern Vyper projects.
 This extension is pinned to:
 
 - grammar repo: `https://github.com/heswithme/vyper-tree-sitter`
-- revision: `0948bf47821b84425d06e91b144f5f2bc0816ba3`
+- revision: `1f4eb25700c65908106ce8c4a63e8c35939f5ccc`
 
 All Zed-specific `.scm` queries live in this repository under `languages/vyper/`.
 The grammar repository is treated as the parser source, not the editor UX layer.
@@ -43,6 +54,10 @@ The extension resolves `vyper-lsp` in this order:
 
 If neither exists, Zed shows a language server failure telling you to install
 `vyper-lsp` or configure an explicit binary path.
+
+If the workspace uses a standard `.venv`, no additional Zed configuration is
+needed for libraries installed there.
+The important path is the `site-packages` directory, not `.venv` itself.
 
 ## Zed Configuration
 
@@ -109,6 +124,8 @@ uv tool install vyper-lsp
 ```
 
 6. Optionally override the server path through `lsp.vyper-lsp.binary.path`.
+7. If you want to test workspace dependency resolution, create a root-level
+   `.venv` and install Vyper libraries there.
 
 ### Verification
 
@@ -121,7 +138,7 @@ For grammar smoke checks, parse the fixtures with the pinned grammar revision:
 
 ```bash
 git clone https://github.com/heswithme/vyper-tree-sitter /tmp/vyper-tree-sitter
-git -C /tmp/vyper-tree-sitter checkout 0948bf47821b84425d06e91b144f5f2bc0816ba3
+git -C /tmp/vyper-tree-sitter checkout 1f4eb25700c65908106ce8c4a63e8c35939f5ccc
 cd /tmp/vyper-tree-sitter
 tree-sitter generate
 ZED_VYPER_DIR=/path/to/zed-vyper
@@ -137,6 +154,7 @@ Included:
 - publishable grammar pin
 - syntax highlighting and editor ergonomics
 - user-managed `vyper-lsp` integration with explicit binary override support
+- automatic workspace `.venv` env injection for site-packages imports
 - Zed-native text objects for functions and declarations
 
 Deferred:
