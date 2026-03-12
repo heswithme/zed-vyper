@@ -33,3 +33,7 @@ jobs:
       - name: Parse Fixtures
         run: |
           tree-sitter parse -q -p /tmp/vyper-tree-sitter fixtures/*.vy fixtures/*.vyi
+
+      - name: Query Highlights
+        run: |
+          tree-sitter query languages/vyper/highlights.scm -p /tmp/vyper-tree-sitter fixtures/*.vy fixtures/*.vyi > /tmp/vyper-highlights.txt

@@ -44,7 +44,12 @@
 (comment) @comment
 (pragma_directive) @preproc
 (string) @string
+(hex_string) @string
+(prefixed_string) @string
+(prefixed_byte_string) @string
+(triple_quoted_string) @string
 (integer) @number
+(decimal) @number
 (boolean) @boolean
 
 (module_docstring
@@ -136,12 +141,24 @@
     function: (_) @function)
 ] 
 
+(empty_builtin
+  "empty" @function)
+
+(abi_decode_builtin
+  [
+    "abi_decode"
+    "_abi_decode"
+  ] @function)
+
 [
   (parameter
     name: (identifier) @variable.parameter)
   (typed_loop_variable
     name: (identifier) @variable.parameter)
 ] 
+
+(keyword_argument
+  name: (identifier) @variable.parameter)
 
 (attribute
   attribute: (identifier) @property)
@@ -182,6 +199,11 @@
     (identifier) @type)
   (hash_map_type
     (identifier) @type)
+  (bytes_type) @type
+  (string_type) @type
+  (dyn_array_type) @type
+  (tuple_type) @type
+  (indexed_type) @type
 ] 
 
 ((identifier) @variable.special
