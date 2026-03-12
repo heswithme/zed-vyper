@@ -7,11 +7,19 @@ use zed_extension_api::{
 
 struct VyperExtension;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum Backend {
+    #[default]
+    VyperLsp,
+    Couleuvre,
+}
+
 struct LaunchSettings {
     args: Vec<String>,
     env: Vec<(String, String)>,
     env_overrides: Vec<(String, String)>,
     explicit_path: Option<String>,
+    backend: Backend,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -35,19 +43,22 @@ impl VyperExtension {
         let mut args = Vec::new();
         let mut env_overrides = Vec::new();
         let mut explicit_path = None;
+        let mut backend = Backend::default();
 
-        if let Some(settings) = Self::lsp_settings(worktree)
-            && let Some(binary) = settings.binary
-        {
-            if let Some(binary_args) = binary.arguments {
-                args = binary_args;
+        if let Some(settings) = Self::lsp_settings(worktree) {
+            backend = Self::backend_from_settings_value(settings.settings.as_ref());
+
+            if let Some(binary) = settings.binary {
+                if let Some(binary_args) = binary.arguments {
+                    args = binary_args;
+                }
+
+                if let Some(binary_env) = binary.env {
+                    env_overrides = binary_env.into_iter().collect();
+                }
+
+                explicit_path = binary.path;
             }
-
-            if let Some(binary_env) = binary.env {
-                env_overrides = binary_env.into_iter().collect();
-            }
-
-            explicit_path = binary.path;
         }
 
         LaunchSettings {
@@ -55,6 +66,7 @@ impl VyperExtension {
             env,
             env_overrides,
             explicit_path,
+            backend,
         }
     }
 
@@ -65,8 +77,34 @@ impl VyperExtension {
         set_language_server_installation_status(language_server_id, &status);
     }
 
-    fn missing_binary_message() -> String {
-        "Unable to find `vyper-lsp`. Install it with `uv tool install vyper-lsp`, ensure it is available on your PATH, or configure `lsp.vyper-lsp.binary.path`.".to_string()
+    fn backend_from_name(name: &str) -> Backend {
+        match name {
+            "couleuvre" => Backend::Couleuvre,
+            _ => Backend::VyperLsp,
+        }
+    }
+
+    fn backend_from_settings_value(settings: Option<&serde_json::Value>) -> Backend {
+        settings
+            .and_then(serde_json::Value::as_object)
+            .and_then(|settings| settings.get("backend"))
+            .and_then(serde_json::Value::as_str)
+            .map(Self::backend_from_name)
+            .unwrap_or_default()
+    }
+
+    fn backend_binary_name(backend: Backend) -> &'static str {
+        match backend {
+            Backend::VyperLsp => "vyper-lsp",
+            Backend::Couleuvre => "couleuvre",
+        }
+    }
+
+    fn missing_binary_message(backend: Backend) -> String {
+        match backend {
+            Backend::VyperLsp => "Unable to find `vyper-lsp`. Install it with `uv tool install vyper-lsp`, ensure it is available on your PATH, or configure `lsp.vyper-lsp.binary.path`.".to_string(),
+            Backend::Couleuvre => "Couleuvre currently requires an explicit `lsp.vyper-lsp.binary.path`. Install it with `uv tool install --with packaging couleuvre`, then point Zed at a working Couleuvre command such as the tool environment Python with arguments `[-m, couleuvre]`, or use an explicit `uv run` command.".to_string(),
+        }
     }
 
     fn is_windows() -> bool {
@@ -207,10 +245,11 @@ impl VyperExtension {
         Self::set_env_var(env, key, segments.join(separator));
     }
 
-    fn inject_workspace_venv(worktree: &Worktree, env: &mut Vec<(String, String)>) {
-        let venv = Self::workspace_venv(worktree);
-        let separator = Self::path_list_separator();
-
+    fn apply_workspace_venv(
+        venv: &WorkspaceVenv,
+        env: &mut Vec<(String, String)>,
+        separator: &str,
+    ) {
         // Make workspace-installed Vyper libraries visible to the global language server.
         for site_packages in venv.site_packages.iter().rev() {
             Self::prepend_env_path(env, "PYTHONPATH", site_packages, separator);
@@ -218,6 +257,16 @@ impl VyperExtension {
         for bin_dir in venv.bin_dirs.iter().rev() {
             Self::prepend_env_path(env, "PATH", bin_dir, separator);
         }
+    }
+
+    fn inject_backend_env(backend: Backend, worktree: &Worktree, env: &mut Vec<(String, String)>) {
+        if backend != Backend::VyperLsp {
+            return;
+        }
+
+        let venv = Self::workspace_venv(worktree);
+        let separator = Self::path_list_separator();
+        Self::apply_workspace_venv(&venv, env, separator);
     }
 
     fn apply_env_overrides(env: &mut Vec<(String, String)>, overrides: Vec<(String, String)>) {
@@ -245,8 +294,21 @@ impl VyperExtension {
     fn workspace_configuration_from_settings(
         settings: Option<LspSettings>,
     ) -> Option<serde_json::Value> {
-        settings.and_then(|lsp_settings| lsp_settings.settings)
+        let settings = settings.and_then(|lsp_settings| lsp_settings.settings);
+
+        match settings {
+            Some(serde_json::Value::Object(mut settings)) => {
+                settings.remove("backend");
+                if settings.is_empty() {
+                    None
+                } else {
+                    Some(serde_json::Value::Object(settings))
+                }
+            }
+            other => other,
+        }
     }
+
 }
 
 impl Extension for VyperExtension {
@@ -264,20 +326,23 @@ impl Extension for VyperExtension {
             mut env,
             env_overrides,
             explicit_path,
+            backend,
         } = Self::launch_settings(worktree);
 
-        Self::inject_workspace_venv(worktree, &mut env);
+        Self::inject_backend_env(backend, worktree, &mut env);
         Self::apply_env_overrides(&mut env, env_overrides);
 
         if let Some(explicit_path) = explicit_path {
             return Self::ready_command(language_server_id, explicit_path, args, env);
         }
 
-        if let Some(path_binary) = worktree.which(Self::LANGUAGE_SERVER_ID) {
+        if backend == Backend::VyperLsp
+            && let Some(path_binary) = worktree.which(Self::backend_binary_name(backend))
+        {
             return Self::ready_command(language_server_id, path_binary, args, env);
         }
 
-        let message = Self::missing_binary_message();
+        let message = Self::missing_binary_message(backend);
         Self::mark_status(
             language_server_id,
             LanguageServerInstallationStatus::Failed(message.clone()),
@@ -310,8 +375,9 @@ register_extension!(VyperExtension);
 
 #[cfg(test)]
 mod tests {
-    use super::VyperExtension;
+    use super::{Backend, VyperExtension};
     use std::path::{Path, PathBuf};
+    use zed_extension_api::{serde_json, settings::LspSettings};
 
     #[test]
     fn normalizes_vyper_file_root_to_parent() {
@@ -387,6 +453,70 @@ mod tests {
     }
 
     #[test]
+    fn backend_defaults_to_vyper_lsp_when_unset() {
+        assert_eq!(VyperExtension::backend_from_settings_value(None), Backend::VyperLsp);
+        assert_eq!(
+            VyperExtension::backend_from_settings_value(Some(&serde_json::json!({}))),
+            Backend::VyperLsp
+        );
+    }
+
+    #[test]
+    fn backend_parses_couleuvre_from_settings() {
+        assert_eq!(
+            VyperExtension::backend_from_settings_value(Some(&serde_json::json!({
+                "backend": "couleuvre"
+            }))),
+            Backend::Couleuvre
+        );
+    }
+
+    #[test]
+    fn invalid_backend_defaults_to_vyper_lsp() {
+        assert_eq!(
+            VyperExtension::backend_from_settings_value(Some(&serde_json::json!({
+                "backend": "unknown"
+            }))),
+            Backend::VyperLsp
+        );
+    }
+
+    #[test]
+    fn workspace_configuration_strips_backend_setting() {
+        let settings = LspSettings {
+            binary: None,
+            initialization_options: None,
+            settings: Some(serde_json::json!({
+                "backend": "couleuvre",
+                "foo": {"bar": true}
+            })),
+        };
+
+        assert_eq!(
+            VyperExtension::workspace_configuration_from_settings(Some(settings)),
+            Some(serde_json::json!({
+                "foo": {"bar": true}
+            }))
+        );
+    }
+
+    #[test]
+    fn workspace_configuration_returns_none_when_only_backend_is_present() {
+        let settings = LspSettings {
+            binary: None,
+            initialization_options: None,
+            settings: Some(serde_json::json!({
+                "backend": "couleuvre"
+            })),
+        };
+
+        assert_eq!(
+            VyperExtension::workspace_configuration_from_settings(Some(settings)),
+            None
+        );
+    }
+
+    #[test]
     fn prepends_and_deduplicates_env_path() {
         let mut env = vec![(
             "PYTHONPATH".to_string(),
@@ -418,5 +548,39 @@ mod tests {
         );
 
         assert_eq!(env, vec![("PATH".to_string(), "/custom/bin".to_string())]);
+    }
+
+    #[test]
+    fn workspace_venv_is_only_applied_for_vyper_lsp() {
+        let venv = VyperExtension::workspace_venv_for_base_with_platform(
+            Path::new("/workspace/contracts/main"),
+            false,
+        );
+        let mut env = vec![("PATH".to_string(), "/usr/bin".to_string())];
+
+        VyperExtension::apply_workspace_venv(&venv, &mut env, ":");
+
+        assert_eq!(
+            env.first(),
+            Some(&(
+                "PYTHONPATH".to_string(),
+                "/workspace/contracts/main/.venv/lib/python3.15/site-packages:/workspace/contracts/main/.venv/lib/python3.14/site-packages:/workspace/contracts/main/.venv/lib/python3.13/site-packages:/workspace/contracts/main/.venv/lib/python3.12/site-packages:/workspace/contracts/main/.venv/lib/python3.11/site-packages:/workspace/contracts/main/.venv/lib/python3.10/site-packages:/workspace/contracts/.venv/lib/python3.15/site-packages:/workspace/contracts/.venv/lib/python3.14/site-packages:/workspace/contracts/.venv/lib/python3.13/site-packages:/workspace/contracts/.venv/lib/python3.12/site-packages:/workspace/contracts/.venv/lib/python3.11/site-packages:/workspace/contracts/.venv/lib/python3.10/site-packages:/workspace/.venv/lib/python3.15/site-packages:/workspace/.venv/lib/python3.14/site-packages:/workspace/.venv/lib/python3.13/site-packages:/workspace/.venv/lib/python3.12/site-packages:/workspace/.venv/lib/python3.11/site-packages:/workspace/.venv/lib/python3.10/site-packages".to_string()
+            ))
+        );
+        assert_eq!(
+            env.get(1),
+            Some(&(
+                "PATH".to_string(),
+                "/workspace/contracts/main/.venv/bin:/workspace/contracts/.venv/bin:/workspace/.venv/bin:/usr/bin".to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn couleuvre_missing_binary_message_mentions_couleuvre() {
+        assert_eq!(
+            VyperExtension::missing_binary_message(Backend::Couleuvre),
+            "Couleuvre currently requires an explicit `lsp.vyper-lsp.binary.path`. Install it with `uv tool install --with packaging couleuvre`, then point Zed at a working Couleuvre command such as the tool environment Python with arguments `[-m, couleuvre]`, or use an explicit `uv run` command.".to_string()
+        );
     }
 }
