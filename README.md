@@ -96,6 +96,9 @@ The important path is the `site-packages` directory, not `.venv` itself.
 
 ## Zed Configuration
 
+Put these examples in Zed's `settings.json`.
+In Zed, press `Shift-Cmd-P` and run `zed: open settings file`.
+
 Default backend, explicit binary path:
 
 ```json
