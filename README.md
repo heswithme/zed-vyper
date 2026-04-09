@@ -91,7 +91,7 @@ If neither exists, Zed shows a language server failure telling you to install
 the selected backend or configure an explicit binary path.
 
 If the workspace uses a standard `.venv`, no additional Zed configuration is
-needed for libraries installed there when using `vyper-lsp`.
+needed for libraries installed there with either backend.
 The important path is the `site-packages` directory, not `.venv` itself.
 
 ## Zed Configuration
@@ -107,6 +107,31 @@ Default backend, explicit binary path:
     "vyper-lsp": {
       "binary": {
         "path": "/absolute/path/to/vyper-lsp"
+      }
+    }
+  }
+}
+```
+
+If automatic `.venv` discovery is not enough for a specific repository, put a
+workspace-local override in `.zed/settings.json` at the repo root and set
+`binary.env.PYTHONPATH` explicitly to the needed `site-packages` path.
+
+Example `.zed/settings.json`:
+
+```json
+{
+  "lsp": {
+    "vyper-lsp": {
+      "settings": {
+        "backend": "couleuvre"
+      },
+      "binary": {
+        "path": "/absolute/path/to/python",
+        "arguments": ["-m", "couleuvre"],
+        "env": {
+          "PYTHONPATH": "/absolute/path/to/repo/.venv/lib/python3.12/site-packages"
+        }
       }
     }
   }
@@ -191,7 +216,8 @@ options, and workspace settings:
 ```
 
 `backend` is consumed by the extension and is not forwarded to the selected
-language server as workspace configuration.
+language server as workspace configuration. `binary.env` remains the escape
+hatch for repo-specific launch env overrides such as `PYTHONPATH`.
 
 ## Development
 

@@ -308,7 +308,6 @@ impl VyperExtension {
             other => other,
         }
     }
-
 }
 
 impl Extension for VyperExtension {
@@ -454,7 +453,10 @@ mod tests {
 
     #[test]
     fn backend_defaults_to_vyper_lsp_when_unset() {
-        assert_eq!(VyperExtension::backend_from_settings_value(None), Backend::VyperLsp);
+        assert_eq!(
+            VyperExtension::backend_from_settings_value(None),
+            Backend::VyperLsp
+        );
         assert_eq!(
             VyperExtension::backend_from_settings_value(Some(&serde_json::json!({}))),
             Backend::VyperLsp
@@ -561,17 +563,40 @@ mod tests {
         VyperExtension::apply_workspace_venv(&venv, &mut env, ":");
 
         assert_eq!(
-            env.first(),
+            env.iter().find(|(key, _)| key == "PYTHONPATH"),
             Some(&(
                 "PYTHONPATH".to_string(),
                 "/workspace/contracts/main/.venv/lib/python3.15/site-packages:/workspace/contracts/main/.venv/lib/python3.14/site-packages:/workspace/contracts/main/.venv/lib/python3.13/site-packages:/workspace/contracts/main/.venv/lib/python3.12/site-packages:/workspace/contracts/main/.venv/lib/python3.11/site-packages:/workspace/contracts/main/.venv/lib/python3.10/site-packages:/workspace/contracts/.venv/lib/python3.15/site-packages:/workspace/contracts/.venv/lib/python3.14/site-packages:/workspace/contracts/.venv/lib/python3.13/site-packages:/workspace/contracts/.venv/lib/python3.12/site-packages:/workspace/contracts/.venv/lib/python3.11/site-packages:/workspace/contracts/.venv/lib/python3.10/site-packages:/workspace/.venv/lib/python3.15/site-packages:/workspace/.venv/lib/python3.14/site-packages:/workspace/.venv/lib/python3.13/site-packages:/workspace/.venv/lib/python3.12/site-packages:/workspace/.venv/lib/python3.11/site-packages:/workspace/.venv/lib/python3.10/site-packages".to_string()
             ))
         );
         assert_eq!(
-            env.get(1),
+            env.iter().find(|(key, _)| key == "PATH"),
             Some(&(
                 "PATH".to_string(),
                 "/workspace/contracts/main/.venv/bin:/workspace/contracts/.venv/bin:/workspace/.venv/bin:/usr/bin".to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn binary_env_pythonpath_override_wins_last() {
+        let mut env = vec![(
+            "PYTHONPATH".to_string(),
+            "/workspace/.venv/lib/python3.12/site-packages".to_string(),
+        )];
+        VyperExtension::apply_env_overrides(
+            &mut env,
+            vec![(
+                "PYTHONPATH".to_string(),
+                "/override/site-packages".to_string(),
+            )],
+        );
+
+        assert_eq!(
+            env.iter().find(|(key, _)| key == "PYTHONPATH"),
+            Some(&(
+                "PYTHONPATH".to_string(),
+                "/override/site-packages".to_string(),
             ))
         );
     }
