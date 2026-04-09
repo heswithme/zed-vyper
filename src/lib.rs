@@ -260,7 +260,7 @@ impl VyperExtension {
     }
 
     fn inject_backend_env(backend: Backend, worktree: &Worktree, env: &mut Vec<(String, String)>) {
-        if backend != Backend::VyperLsp {
+        if !matches!(backend, Backend::VyperLsp | Backend::Couleuvre) {
             return;
         }
 
@@ -551,7 +551,7 @@ mod tests {
     }
 
     #[test]
-    fn workspace_venv_is_only_applied_for_vyper_lsp() {
+    fn workspace_venv_candidate_paths_are_applied_to_server_env() {
         let venv = VyperExtension::workspace_venv_for_base_with_platform(
             Path::new("/workspace/contracts/main"),
             false,

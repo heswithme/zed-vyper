@@ -22,15 +22,14 @@ Reference-quality Vyper support for Zed.
 The backend selector lives under `lsp.vyper-lsp.settings.backend`, and defaults
 to `vyper-lsp` when unset or invalid.
 
-To help global `vyper-lsp` resolve workspace-installed Vyper libraries, the
+To help the selected backend resolve workspace-installed Vyper libraries, the
 extension prepends common `.venv` candidate paths from the current worktree and
-its ancestors before launching `vyper-lsp`:
+its ancestors before launching the language server:
 
 - `.venv/lib/python3.15` through `.venv/lib/python3.10` `site-packages` paths to `PYTHONPATH`
 - `.venv/bin` to `PATH`
 
-That `.venv` env shaping is only applied to `vyper-lsp`. Couleuvre keeps its
-own documented environment/version model.
+That `.venv` env shaping is applied to both `vyper-lsp` and Couleuvre.
 
 Syntax support aims to stay broad enough to open real-world Vyper files cleanly.
 `vyper-lsp` remains the recommended default because it is more feature-complete
