@@ -21,4 +21,6 @@
     name: (identifier) @name)
   (constant_declaration
     name: (identifier) @name)
+  (immutable_declaration
+      name: (identifier) @name)
 ] @item

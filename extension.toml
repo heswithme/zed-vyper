@@ -13,8 +13,8 @@ kind = "Rust"
 version = "0.7.0"
 
 [grammars.vyper]
-repository = "https://github.com/heswithme/vyper-tree-sitter"
-rev = "6f78ae655bc405e2be898e30cf70ff37121fc933"
+repository = "https://github.com/lsankar4033/vyper-tree-sitter"
+rev = "d368ede295e190b66b522ce344fbea4d6c1743e1"
 
 [language_servers.vyper-lsp]
 name = "Vyper LSP"

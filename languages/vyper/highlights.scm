@@ -132,7 +132,13 @@
 (constant_declaration
   name: (identifier) @constant)
 
+(immutable_declaration
+  name: (identifier) @constant)
+
 (constant_type
+    (identifier) @type)
+
+(immutable_type
     (identifier) @type)
 
 [
