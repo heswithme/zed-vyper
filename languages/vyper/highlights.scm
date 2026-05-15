@@ -132,6 +132,9 @@
 (constant_declaration
   name: (identifier) @constant)
 
+(constant_type
+    (identifier) @type)
+
 [
   (function_signature
     name: (identifier) @function)
