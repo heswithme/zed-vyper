@@ -118,28 +118,35 @@
     name: (identifier) @enum)
   (flag_declaration
     name: (identifier) @enum)
-] 
+]
 
 [
-  (state_variable_declaration
-    name: (identifier) @property)
   (struct_member
     name: (identifier) @property)
   (event_member
     name: (identifier) @property)
   (module_binding
     name: (identifier) @variable)
-] 
+]
 
 (constant_declaration
   name: (identifier) @constant)
+
+(immutable_declaration
+  name: (identifier) @constant)
+
+(constant_type
+    (identifier) @type)
+
+(immutable_type
+    (identifier) @type)
 
 [
   (function_signature
     name: (identifier) @function)
   (call
     function: (_) @function)
-] 
+]
 
 (empty_builtin
   "empty" @function)
@@ -155,7 +162,7 @@
     name: (identifier) @variable.parameter)
   (typed_loop_variable
     name: (identifier) @variable.parameter)
-] 
+]
 
 (keyword_argument
   name: (identifier) @variable.parameter)
@@ -178,7 +185,7 @@
   (module_initialization
     module: (imported_type
       (identifier) @module))
-] 
+]
 
 [
   (parameter
@@ -204,7 +211,7 @@
   (dyn_array_type) @type
   (tuple_type) @type
   (indexed_type) @type
-] 
+]
 
 ((identifier) @variable.special
   (#any-of? @variable.special "self" "msg" "block" "tx" "chain"))
